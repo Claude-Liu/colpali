@@ -41,8 +41,27 @@ class BiPairwiseCELoss(torch.nn.Module):
 
         return loss
 
+class BiPosNegCELoss(torch.nn.Module):
+    def __init__(self,):
+        super().__init__()
+        self.ce = CrossEntropyLoss()
 
-class BiPairwiseNegativeCELoss(torch.nn.Module):
+    def forward(self, query_embeddings, doc_embeddings, neg_doc_embeddings):
+        """
+        query_embeddings: (batch_size, dim)
+        doc_embeddings: (batch_size, dim)
+        neg_doc_embeddings: (batch_size, dim)
+        """
+
+        # Compute the ColBERT scores
+        pos_scores = torch.einsum("bd,cd->bc", query_embeddings, doc_embeddings)
+        neg_scores = torch.einsum("bd,cd->bc", query_embeddings, neg_doc_embeddings).diagonal()
+
+        sim_scores = torch.cat([pos_scores, neg_scores.unsqueeze(1)],dim=-1)
+        loss = self.ce(sim_scores, torch.arange(sim_scores.shape[0], device=sim_scores.device))
+        return loss
+
+class BiPairwiseNegativeLoss(torch.nn.Module):
     def __init__(self, in_batch_term=False):
         super().__init__()
         self.ce_loss = CrossEntropyLoss()

@@ -73,6 +73,8 @@ class BaseVisualRetrieverProcessor(ABC):
     ) -> torch.Tensor:
         """
         Compute the MaxSim score (ColBERT-like) for the given multi-vector query and passage embeddings.
+        qs: query
+        ds: doc (key)
         """
         device = device or get_torch_device("auto")
 
@@ -87,15 +89,18 @@ class BaseVisualRetrieverProcessor(ABC):
             scores_batch = []
             qs_batch = torch.nn.utils.rnn.pad_sequence(qs[i : i + batch_size], batch_first=True, padding_value=0).to(
                 device
-            )
+            ) # (batch_size, max_length, embedding_dim)
             for j in range(0, len(ps), batch_size):
                 ps_batch = torch.nn.utils.rnn.pad_sequence(
                     ps[j : j + batch_size], batch_first=True, padding_value=0
-                ).to(device)
+                ).to(device) # (batch_size, max_length, embedding_dim)
+                # [(query_batch_size, key_batch_size)]
                 scores_batch.append(torch.einsum("bnd,csd->bcns", qs_batch, ps_batch).max(dim=3)[0].sum(dim=2))
+            # (query_batch_size, all_key_num)
             scores_batch = torch.cat(scores_batch, dim=1).cpu()
+            # [(query_batch_size, all_key_num)]
             scores_list.append(scores_batch)
-
+        # (all_query_num, all_key_num)
         scores = torch.cat(scores_list, dim=0)
         assert scores.shape[0] == len(qs), f"Expected {len(qs)} scores, got {scores.shape[0]}"
 
